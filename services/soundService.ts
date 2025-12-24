@@ -1,9 +1,18 @@
+import { VoiceRecognitionStatus } from '../types';
 
 export class SoundService {
   private static context: AudioContext | null = null;
   private static gainNode: GainNode | null = null;
+  private static recognition: SpeechRecognition | null = null;
+  private static isListening: boolean = false;
+  private static wakeWord: string = '贾维斯';
+  private static isWakeWordDetected: boolean = false;
+  private static conversationCallback: ((command: string) => void) | null = null;
+  private static voiceEventListeners: Map<string, Array<(status: VoiceRecognitionStatus, command?: string, isProcessing?: boolean) => void>> = new Map();
 
+  // Initialize all sound and speech services
   static initialize() {
+    // Existing audio context initialization
     if (!this.context) {
       this.context = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.gainNode = this.context.createGain();
@@ -13,6 +22,172 @@ export class SoundService {
     if (this.context.state === 'suspended') {
       this.context.resume();
     }
+
+    // Initialize speech recognition
+    this.initializeSpeechRecognition();
+    this.notifyVoiceEvent(VoiceRecognitionStatus.IDLE);
+  }
+
+  // Initialize speech recognition
+  private static initializeSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn('Speech Recognition API not supported in this browser');
+      return;
+    }
+
+    this.recognition = new SpeechRecognition();
+    this.recognition.continuous = true;
+    this.recognition.interimResults = false;
+    this.recognition.lang = 'zh-CN'; // Chinese language support
+
+    this.recognition.onresult = (event) => {
+      const transcript = event.results[event.results.length - 1][0].transcript.trim();
+      console.log('Recognized:', transcript);
+      this.handleSpeechResult(transcript);
+    };
+
+    this.recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      // Restart recognition if it stops unexpectedly
+      if (this.isListening) {
+        setTimeout(() => this.startListening(), 1000);
+      }
+    };
+
+    this.recognition.onend = () => {
+      // Auto-restart recognition when it ends
+      if (this.isListening) {
+        this.recognition?.start();
+      }
+    };
+
+    this.recognition.onsoundstart = () => {
+      this.notifyVoiceEvent(VoiceRecognitionStatus.RECOGNIZING);
+    };
+
+    this.recognition.onspeechend = () => {
+      this.notifyVoiceEvent(VoiceRecognitionStatus.LISTENING);
+    };
+  }
+
+  // Handle speech recognition results
+  private static handleSpeechResult(transcript: string) {
+    this.notifyVoiceEvent(VoiceRecognitionStatus.RECOGNIZING, transcript, true);
+    
+    // Check for wake word if not already detected
+    if (!this.isWakeWordDetected) {
+      if (transcript.includes(this.wakeWord) || transcript.includes('jarvis')) {
+        this.isWakeWordDetected = true;
+        this.speak('我在，有什么可以帮助您的？');
+        // Play a confirmation sound
+        this.playBlip();
+        this.notifyVoiceEvent(VoiceRecognitionStatus.WAKE_WORD_DETECTED, transcript);
+      } else {
+        this.notifyVoiceEvent(VoiceRecognitionStatus.LISTENING, transcript);
+      }
+      return;
+    }
+
+    // If wake word already detected, process the command
+    if (transcript.toLowerCase().includes('退出') || transcript.toLowerCase().includes('停止')) {
+      this.speak('好的，我将停止监听。');
+      this.isWakeWordDetected = false;
+      this.playRelease();
+      this.notifyVoiceEvent(VoiceRecognitionStatus.LISTENING, transcript);
+    } else {
+      // Pass the command to the conversation callback
+      if (this.conversationCallback) {
+        this.conversationCallback(transcript);
+      } else {
+        // Default response if no callback is set
+        this.handleDefaultCommand(transcript);
+      }
+      this.notifyVoiceEvent(VoiceRecognitionStatus.LISTENING, transcript);
+    }
+  }
+
+  // Default command handler
+  private static handleDefaultCommand(command: string) {
+    const lowerCommand = command.toLowerCase();
+    
+    // Simple command examples
+    if (lowerCommand.includes('你好') || lowerCommand.includes('hello')) {
+      this.speak('您好，我是贾维斯。');
+    } else if (lowerCommand.includes('时间') || lowerCommand.includes('几点')) {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+      this.speak(`现在是 ${timeString}`);
+    } else if (lowerCommand.includes('天气')) {
+      this.speak('抱歉，当前暂不支持天气查询功能。');
+    } else if (lowerCommand.includes('系统状态') || lowerCommand.includes('运行')) {
+      this.speak('系统运行正常，所有模块已初始化。');
+    } else if (lowerCommand.includes('帮助')) {
+      this.speak('您可以使用语音命令与我交互，例如询问时间、系统状态等。说退出可以结束对话。');
+    } else {
+      this.speak('抱歉，我不太明白您的意思。请尝试其他命令。');
+    }
+  }
+
+  // Start listening for speech
+  static startListening(callback?: (command: string) => void) {
+    if (callback) {
+      this.conversationCallback = callback;
+    }
+
+    if (this.recognition && !this.isListening) {
+      this.isListening = true;
+      this.recognition.start();
+      console.log('Speech recognition started...');
+      this.notifyVoiceEvent(VoiceRecognitionStatus.LISTENING);
+    }
+  }
+
+  // Stop listening for speech
+  static stopListening() {
+    if (this.recognition && this.isListening) {
+      this.isListening = false;
+      this.isWakeWordDetected = false;
+      this.recognition.stop();
+      this.conversationCallback = null;
+      console.log('Speech recognition stopped.');
+      this.notifyVoiceEvent(VoiceRecognitionStatus.IDLE);
+    }
+  }
+
+  // Voice event handling
+  private static notifyVoiceEvent(status: VoiceRecognitionStatus, command?: string, isProcessing: boolean = false) {
+    const listeners = this.voiceEventListeners.get('statusChanged');
+    if (listeners) {
+      listeners.forEach(listener => listener(status, command, isProcessing));
+    }
+  }
+
+  static addVoiceEventListener(event: string, callback: (status: VoiceRecognitionStatus, command?: string, isProcessing?: boolean) => void) {
+    if (!this.voiceEventListeners.has(event)) {
+      this.voiceEventListeners.set(event, []);
+    }
+    this.voiceEventListeners.get(event)?.push(callback);
+  }
+
+  static removeVoiceEventListener(event: string, callback: (status: VoiceRecognitionStatus, command?: string, isProcessing?: boolean) => void) {
+    const listeners = this.voiceEventListeners.get(event);
+    if (listeners) {
+      const index = listeners.indexOf(callback);
+      if (index !== -1) {
+        listeners.splice(index, 1);
+      }
+    }
+  }
+
+  // Set custom wake word
+  static setWakeWord(word: string) {
+    this.wakeWord = word;
+  }
+
+  // Get current listening status
+  static getListeningStatus() {
+    return { isListening: this.isListening, isWakeWordDetected: this.isWakeWordDetected };
   }
 
   // Text-to-Speech implementation

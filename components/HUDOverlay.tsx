@@ -1,10 +1,11 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { HandTrackingState, RegionName } from '../types';
+import { HandTrackingState, RegionName, VoiceRecognitionState } from '../types';
 import { SoundService } from '../services/soundService';
 
 interface HUDOverlayProps {
   handTrackingRef: React.MutableRefObject<HandTrackingState>;
   currentRegion: RegionName;
+  voiceRecognitionState: VoiceRecognitionState;
 }
 
 // --- Sub-Components for Static HUD Elements ---
@@ -22,6 +23,68 @@ const CircularGauge = ({ label, value, color = "text-holo-cyan" }: { label: stri
     </div>
   </div>
 );
+
+// Voice Recognition Status Indicator
+const VoiceRecognitionIndicator = ({ state }: { state: VoiceRecognitionState }) => {
+  const getStatusColor = () => {
+    switch (state.status) {
+      case "listening":
+        return "bg-holo-cyan/80 text-black";
+      case "recognizing":
+        return "bg-yellow-500/80 text-black";
+      case "wake_word_detected":
+        return "bg-alert-red/80 text-white";
+      default:
+        return "bg-gray-600/80 text-gray-200";
+    }
+  };
+
+  const getStatusText = () => {
+    switch (state.status) {
+      case "listening":
+        return "监听中...";
+      case "recognizing":
+        return "识别中...";
+      case "wake_word_detected":
+        return "已唤醒！";
+      default:
+        return "待命";
+    }
+  };
+
+  return (
+    <div className="absolute bottom-16 right-8 z-40 bg-black/80 border border-holo-cyan/40 p-3 rounded-lg backdrop-blur-sm shadow-[0_0_20px_rgba(0,240,255,0.3)]">
+      <div className="flex items-center gap-3">
+        {/* Microphone Icon */}
+        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${getStatusColor()} shadow-lg animate-pulse-slow`}>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+          </svg>
+        </div>
+        
+        {/* Status Info */}
+        <div className="flex flex-col">
+          <div className="text-xs uppercase tracking-widest text-gray-400">语音识别</div>
+          <div className={`text-sm font-bold ${getStatusColor().replace('bg-', 'text-').replace('text-black', 'text-white')} animate-blink-slow`}>
+            {getStatusText()}
+          </div>
+          {state.lastCommand && (
+            <div className="text-xs text-gray-500 mt-1 font-mono truncate max-w-[200px]">
+              "{state.lastCommand}"
+            </div>
+          )}
+        </div>
+      </div>
+      
+      {/* Progress Bar */}
+      {state.isProcessing && (
+        <div className="mt-2 w-full h-1 bg-gray-800 rounded overflow-hidden">
+          <div className="h-full bg-holo-cyan animate-pulse w-full"></div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const FileTreeWidget = () => (
   <div className="flex flex-col gap-1 text-xs font-mono text-holo-cyan opacity-80 mt-4 border-l-2 border-holo-cyan/30 pl-3 py-2 relative">
@@ -478,6 +541,9 @@ const HUDOverlay: React.FC<HUDOverlayProps> = ({ handTrackingRef, currentRegion 
             </svg>
           </div>
       )}
+      {/* Voice Recognition Status Indicator */}
+      <VoiceRecognitionIndicator state={voiceRecognitionState} />
+      
     </div>
   );
 };

@@ -5,7 +5,7 @@ import VideoFeed from './components/VideoFeed';
 import HolographicEarth from './components/HolographicEarth';
 import HUDOverlay from './components/HUDOverlay';
 import JarvisIntro from './components/JarvisIntro';
-import { HandTrackingState, RegionName } from './types';
+import { HandTrackingState, RegionName, VoiceRecognitionState, VoiceRecognitionStatus } from './types';
 import { SoundService } from './services/soundService';
 
 const App: React.FC = () => {
@@ -18,6 +18,12 @@ const App: React.FC = () => {
   const [booted, setBooted] = useState(false);
   const [introActive, setIntroActive] = useState(false);
   const [bootStep, setBootStep] = useState(0);
+  
+  // Voice recognition state management
+  const [voiceRecognitionState, setVoiceRecognitionState] = useState<VoiceRecognitionState>({
+    status: VoiceRecognitionStatus.IDLE,
+    isProcessing: false
+  });
 
   const handleTrackingUpdate = useCallback((newState: HandTrackingState) => {
     handTrackingRef.current = newState;
@@ -44,9 +50,32 @@ const App: React.FC = () => {
              setIntroActive(false);
              setBooted(true);
              SoundService.playAmbientHum();
+             // Start voice recognition after full boot
+             SoundService.startListening();
+             setVoiceRecognitionState(prev => ({ ...prev, status: VoiceRecognitionStatus.LISTENING }));
         }, 2800); // Intro duration
     }, 2500); // Boot text logs duration
   };
+
+  // Voice recognition state updates
+  useEffect(() => {
+    const updateVoiceStatus = (status: VoiceRecognitionStatus, command?: string, isProcessing?: boolean) => {
+      setVoiceRecognitionState(prev => ({
+        ...prev,
+        status,
+        lastCommand: command,
+        isProcessing: isProcessing ?? prev.isProcessing
+      }));
+    };
+
+    // Subscribe to voice recognition events
+    SoundService.addVoiceEventListener('statusChanged', updateVoiceStatus);
+
+    // Cleanup
+    return () => {
+      SoundService.removeVoiceEventListener('statusChanged', updateVoiceStatus);
+    };
+  }, []);
 
   // Render Boot Screen
   if (!booted && !introActive) {
@@ -128,6 +157,7 @@ const App: React.FC = () => {
       <HUDOverlay 
         handTrackingRef={handTrackingRef} 
         currentRegion={currentRegion}
+        voiceRecognitionState={voiceRecognitionState}
       />
     </div>
   );
