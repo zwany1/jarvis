@@ -322,7 +322,8 @@ const HolographicEarth: React.FC<HolographicEarthProps> = ({ handTrackingRef, se
     let currentSpeedY = 0;
     
     if (rightHand) {
-        const { x, y } = rightHand.rotationControl;
+        const { rotationControl, gesture, isPinching } = rightHand;
+        const { x, y } = rotationControl;
         
         // X-Axis Control (Spinning Left/Right)
         if (Math.abs(x) > 0.1) {
@@ -334,6 +335,34 @@ const HolographicEarth: React.FC<HolographicEarthProps> = ({ handTrackingRef, se
         if (Math.abs(y) > 0.1) {
             currentSpeedY = y * 0.05;
         }
+        
+        // Gesture handling for right hand
+        if (gesture) {
+            switch (gesture) {
+                case 'open_palm':
+                    // Slow down rotation when palm is open
+                    currentSpeedX *= 0.5;
+                    currentSpeedY *= 0.5;
+                    break;
+                case 'closed_fist':
+                    // Speed up rotation when fist is closed
+                    currentSpeedX *= 2;
+                    currentSpeedY *= 2;
+                    break;
+                case 'pointing_up':
+                    // Reset rotation when pointing up
+                    earthGroupRef.current.rotation.x = 0;
+                    break;
+                case 'pinch':
+                    // Zoom in when pinching
+                    targetExpansion = Math.max(0, smoothExpansionRef.current - 0.01);
+                    break;
+                case 'thumb_up':
+                    // Play confirmation sound when thumbs up
+                    SoundService.playBlip();
+                    break;
+            }
+        }
     }
     
     // Apply Spin (Y-axis) to individual components to maintain opposing wireframe rotation
@@ -344,15 +373,40 @@ const HolographicEarth: React.FC<HolographicEarthProps> = ({ handTrackingRef, se
     
     // Apply Tilt (X-axis) to the container group
     earthGroupRef.current.rotation.x += currentSpeedY;
+    // Limit tilt to prevent excessive rotation
+    earthGroupRef.current.rotation.x = Math.max(-Math.PI/4, Math.min(Math.PI/4, earthGroupRef.current.rotation.x));
 
 
     // 2. Expansion/Zoom Control (Left Hand)
     if (leftHand) {
-      targetExpansion = leftHand.expansionFactor;
+      const { expansionFactor, gesture, isPinching } = leftHand;
+      targetExpansion = expansionFactor;
 
       const movementDelta = Math.abs(targetExpansion - smoothExpansionRef.current);
       if (movementDelta > 0.002) {
           SoundService.playServo(movementDelta);
+      }
+      
+      // Gesture handling for left hand
+      if (gesture) {
+          switch (gesture) {
+              case 'open_palm':
+                  // Expand fully when palm is open
+                  targetExpansion = 1.0;
+                  break;
+              case 'closed_fist':
+                  // Contract fully when fist is closed
+                  targetExpansion = 0.0;
+                  break;
+              case 'pinch':
+                  // Zoom out when pinching
+                  targetExpansion = Math.min(1, smoothExpansionRef.current + 0.01);
+                  break;
+              case 'pointing_down':
+                  // Reset expansion when pointing down
+                  targetExpansion = 0.5;
+                  break;
+          }
       }
     }
 

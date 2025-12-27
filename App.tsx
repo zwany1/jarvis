@@ -3,6 +3,7 @@ import React, { useRef, useState, useCallback, Suspense, useEffect } from 'react
 import { Canvas } from '@react-three/fiber';
 import VideoFeed from './components/VideoFeed';
 import HolographicEarth from './components/HolographicEarth';
+import MechaModel from './components/MechaModel';
 import HUDOverlay from './components/HUDOverlay';
 import JarvisIntro from './components/JarvisIntro';
 import { HandTrackingState, RegionName, VoiceRecognitionState, VoiceRecognitionStatus } from './types';
@@ -18,6 +19,8 @@ const App: React.FC = () => {
   const [booted, setBooted] = useState(false);
   const [introActive, setIntroActive] = useState(false);
   const [bootStep, setBootStep] = useState(0);
+  // New state for mecha model display
+  const [showMechaModel, setShowMechaModel] = useState(false);
   
   // Voice recognition state management
   const [voiceRecognitionState, setVoiceRecognitionState] = useState<VoiceRecognitionState>({
@@ -50,8 +53,24 @@ const App: React.FC = () => {
              setIntroActive(false);
              setBooted(true);
              SoundService.playAmbientHum();
-             // Start voice recognition after full boot
-             SoundService.startListening();
+             // Start voice recognition after full boot with command callback
+             SoundService.startListening((command) => {
+               // Handle "机甲面板" command
+               if (command.includes('机甲面板')) {
+                 setShowMechaModel(true);
+                 SoundService.speak('已打开机甲面板');
+               }
+               // Add command to close mecha model
+               else if (command.includes('关闭机甲面板')) {
+                 setShowMechaModel(false);
+                 SoundService.speak('已关闭机甲面板');
+               }
+               // Add command for satellite deployment (returns to Earth model)
+               else if (command.includes('卫星部署')) {
+                 setShowMechaModel(false);
+                 SoundService.speak('卫星部署指令已执行，前往地球模型');
+               }
+             });
              setVoiceRecognitionState(prev => ({ ...prev, status: VoiceRecognitionStatus.LISTENING }));
         }, 2800); // Intro duration
     }, 2500); // Boot text logs duration
@@ -137,7 +156,7 @@ const App: React.FC = () => {
       {/* 1. Background Camera Layer */}
       <VideoFeed onTrackingUpdate={handleTrackingUpdate} />
 
-      {/* 2. 3D Scene Layer (Earth) */}
+      {/* 2. 3D Scene Layer - Show Earth or Mecha Model based on state */}
       <div className="absolute inset-0 z-10 pointer-events-none">
         <Canvas 
             camera={{ position: [0, 0, 5], fov: 45 }} 
@@ -145,10 +164,18 @@ const App: React.FC = () => {
             dpr={[1, 1.5]} // Optimization for high DPI screens
         >
             <Suspense fallback={null}>
-              <HolographicEarth 
-                  handTrackingRef={handTrackingRef} 
-                  setRegion={setCurrentRegion}
-              />
+              {showMechaModel ? (
+                // Show mecha model when activated
+                <MechaModel 
+                    handTrackingRef={handTrackingRef} 
+                />
+              ) : (
+                // Show Earth model by default
+                <HolographicEarth 
+                    handTrackingRef={handTrackingRef} 
+                    setRegion={setCurrentRegion}
+                />
+              )}
             </Suspense>
         </Canvas>
       </div>
@@ -158,6 +185,7 @@ const App: React.FC = () => {
         handTrackingRef={handTrackingRef} 
         currentRegion={currentRegion}
         voiceRecognitionState={voiceRecognitionState}
+        showMechaModel={showMechaModel}
       />
     </div>
   );

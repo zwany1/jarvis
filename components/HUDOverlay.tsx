@@ -6,6 +6,7 @@ interface HUDOverlayProps {
   handTrackingRef: React.MutableRefObject<HandTrackingState>;
   currentRegion: RegionName;
   voiceRecognitionState: VoiceRecognitionState;
+  showMechaModel: boolean;
 }
 
 // --- Sub-Components for Static HUD Elements ---
@@ -24,18 +25,98 @@ const CircularGauge = ({ label, value, color = "text-holo-cyan" }: { label: stri
   </div>
 );
 
-// Voice Recognition Status Indicator
+// Right Eye Tracker for Mecha Panel
+const RightEyeTracker = ({ eyePos }: { eyePos: { x: number, y: number } }) => {
+  // Map eye position to screen movement (scaling factor for more dramatic effect)
+  const translateX = eyePos.x * 100; // Scale by 100px for noticeable movement
+  const translateY = eyePos.y * 100; // Scale by 100px for noticeable movement
+  
+  return (
+    <div 
+      className="absolute top-[35%] right-[65%] z-40 pointer-events-none"
+      style={{ 
+        transform: `translate(0, 0) translate(${translateX}px, ${translateY}px)`,
+        transition: 'transform 0.1s ease-out' // Smooth transition for eye movement
+      }}
+    >
+      {/* Main Eye Tracking Circle */}
+      <div className="relative w-40 h-40 rounded-full flex items-center justify-center">
+        {/* Outer Glowing Ring */}
+        <div className="absolute inset-0 rounded-full border-2 border-holo-cyan/40 animate-pulse-slow shadow-[0_0_30px_rgba(0,240,255,0.6)]"></div>
+        
+        {/* Inner Rotating Ring */}
+        <div className="absolute inset-2 rounded-full border-[4px] border-transparent border-t-holo-cyan/60 border-l-holo-cyan/60 animate-spin-slow"></div>
+        
+        {/* Crosshair Lines */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-full h-px bg-gradient-to-r from-transparent via-holo-cyan/80 to-transparent"></div>
+          <div className="absolute h-full w-px bg-gradient-to-b from-transparent via-holo-cyan/80 to-transparent"></div>
+        </div>
+        
+        {/* Center Dot - Follows eye position */}
+        <div 
+          className="absolute w-3 h-3 rounded-full bg-alert-red animate-pulse shadow-[0_0_15px_rgba(239,68,68,0.9)]"
+          style={{ 
+            transform: `translate(${eyePos.x * 20}px, ${eyePos.y * 20}px)`, // More subtle movement for the dot
+            transition: 'transform 0.1s ease-out'
+          }}
+        ></div>
+        
+        {/* Additional Tracking Elements */}
+        <div className="absolute top-4 right-4 w-8 h-8 border border-yellow-500/50 rounded-full animate-pulse"></div>
+        <div className="absolute bottom-4 left-4 w-6 h-6 border border-holo-blue/50 rounded-full animate-pulse-slow"></div>
+        
+        {/* Targeting Reticles */}
+        <div 
+          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-16 h-16 border-2 border-dashed border-white/30 rounded-full animate-spin-reverse-slow"
+          style={{ 
+            transform: `translate(-50%, -50%) translate(${eyePos.x * 10}px, ${eyePos.y * 10}px)`,
+            transition: 'transform 0.1s ease-out'
+          }}
+        ></div>
+        <div 
+          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-24 h-24 border-2 border-dotted border-holo-cyan/40 rounded-full animate-spin"
+          style={{ 
+            transform: `translate(-50%, -50%) translate(${eyePos.x * 15}px, ${eyePos.y * 15}px)`,
+            transition: 'transform 0.1s ease-out'
+          }}
+        ></div>
+        
+        {/* Dynamic Eye Gaze Line */}
+        <div 
+          className="absolute top-1/2 left-1/2 w-40 h-px bg-gradient-to-r from-holo-cyan/80 via-holo-cyan/40 to-transparent"
+          style={{ 
+            transformOrigin: 'left center',
+            transform: `rotate(${(Math.atan2(eyePos.y, eyePos.x) * 180) / Math.PI}deg) translate(20px, -1px)`,
+            transition: 'transform 0.1s ease-out'
+          }}
+        ></div>
+      </div>
+      
+      {/* Status Text */}
+      <div className="mt-2 text-center">
+        <div className="text-xs uppercase tracking-widest text-holo-cyan/80"></div>
+        <div className="text-[8px] text-yellow-500/70 animate-blink">锁定目标</div>
+        <div className="text-[6px] text-gray-500 mt-1">
+          眼部位置: X: {eyePos.x.toFixed(2)}, Y: {eyePos.y.toFixed(2)}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Voice Recognition Status Indicator - Wavy Line Style
 const VoiceRecognitionIndicator = ({ state }: { state: VoiceRecognitionState }) => {
   const getStatusColor = () => {
     switch (state.status) {
       case "listening":
-        return "bg-holo-cyan/80 text-black";
+        return "#00F0FF";
       case "recognizing":
-        return "bg-yellow-500/80 text-black";
+        return "#FACC15";
       case "wake_word_detected":
-        return "bg-alert-red/80 text-white";
+        return "#EF4444";
       default:
-        return "bg-gray-600/80 text-gray-200";
+        return "#6B7280";
     }
   };
 
@@ -52,20 +133,109 @@ const VoiceRecognitionIndicator = ({ state }: { state: VoiceRecognitionState }) 
     }
   };
 
+  // Get wavy line styles based on status
+  const getWavyLineStyles = () => {
+    const color = getStatusColor();
+    let animation = "animate-pulse-slow";
+    let glow = "shadow-[0_0_20px_rgba(0,240,255,0.6)]";
+
+    switch (state.status) {
+      case "recognizing":
+        animation = "animate-wavy-line-fast";
+        glow = "shadow-[0_0_30px_rgba(250,204,21,0.8)]";
+        break;
+      case "wake_word_detected":
+        animation = "animate-wavy-line-rapid";
+        glow = "shadow-[0_0_40px_rgba(239,68,68,0.9)]";
+        break;
+      case "listening":
+        animation = "animate-wavy-line";
+        glow = "shadow-[0_0_30px_rgba(0,240,255,0.8)]";
+        break;
+      default:
+        animation = "animate-wavy-line-slow";
+        glow = "shadow-[0_0_15px_rgba(107,114,128,0.5)]";
+        break;
+    }
+
+    return {
+      color,
+      animation,
+      glow
+    };
+  };
+
+  const wavyLine = getWavyLineStyles();
+
   return (
-    <div className="absolute bottom-16 right-8 z-40 bg-black/80 border border-holo-cyan/40 p-3 rounded-lg backdrop-blur-sm shadow-[0_0_20px_rgba(0,240,255,0.3)]">
-      <div className="flex items-center gap-3">
-        {/* Microphone Icon */}
-        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${getStatusColor()} shadow-lg animate-pulse-slow`}>
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+    <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-40 flex flex-col items-center gap-3">
+      {/* Wavy Line Indicator */}
+      <div className="w-48 h-12 flex items-center justify-center">
+        <div 
+          className={`relative w-full h-2 overflow-hidden ${wavyLine.glow}`}
+          style={{
+            filter: `drop-shadow(0 0 5px ${wavyLine.color})`
+          }}
+        >
+          {/* Main wavy line */}
+          <svg 
+            className="absolute inset-0 w-full h-full" 
+            viewBox="0 0 200 10" 
+            preserveAspectRatio="none"
+          >
+            <path
+              d="M0,5 Q50,0 100,5 T200,5" 
+              fill="none"
+              stroke={wavyLine.color}
+              strokeWidth="3"
+              className={wavyLine.animation}
+              style={{
+                strokeLinecap: 'round',
+                filter: `blur(1px)`
+              }}
+            />
           </svg>
+          
+          {/* Subtle glow line */}
+          <svg 
+            className="absolute inset-0 w-full h-full" 
+            viewBox="0 0 200 10" 
+            preserveAspectRatio="none"
+          >
+            <path
+              d="M0,5 Q50,0 100,5 T200,5" 
+              fill="none"
+              stroke={wavyLine.color}
+              strokeWidth="1"
+              className={`${wavyLine.animation}`}
+              style={{
+                strokeLinecap: 'round',
+                opacity: 0.5,
+                animationDuration: `${parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue('--wavy-line-duration') || '2') * 0.8}s`
+              }}
+            />
+          </svg>
+          
+          {/* Animated gradient fill */}
+          <div 
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30"
+            style={{
+              transform: 'translateX(-100%)',
+              animation: `shine 1.5s infinite linear`,
+              animationDelay: '0.3s'
+            }}
+          ></div>
         </div>
-        
-        {/* Status Info */}
-        <div className="flex flex-col">
+      </div>
+      
+      {/* Status Info */}
+      <div className="bg-black/80 border border-holo-cyan/40 p-3 rounded-lg backdrop-blur-sm shadow-[0_0_20px_rgba(0,240,255,0.3)]">
+        <div className="flex flex-col items-center text-center">
           <div className="text-xs uppercase tracking-widest text-gray-400">语音识别</div>
-          <div className={`text-sm font-bold ${getStatusColor().replace('bg-', 'text-').replace('text-black', 'text-white')} animate-blink-slow`}>
+          <div 
+            className="text-sm font-bold animate-blink-slow"
+            style={{ color: wavyLine.color }}
+          >
             {getStatusText()}
           </div>
           {state.lastCommand && (
@@ -74,14 +244,17 @@ const VoiceRecognitionIndicator = ({ state }: { state: VoiceRecognitionState }) 
             </div>
           )}
         </div>
+        
+        {/* Progress Bar */}
+        {state.isProcessing && (
+          <div className="mt-2 w-full h-1 bg-gray-800 rounded overflow-hidden">
+            <div 
+              className="h-full animate-pulse w-full"
+              style={{ background: wavyLine.color }}
+            ></div>
+          </div>
+        )}
       </div>
-      
-      {/* Progress Bar */}
-      {state.isProcessing && (
-        <div className="mt-2 w-full h-1 bg-gray-800 rounded overflow-hidden">
-          <div className="h-full bg-holo-cyan animate-pulse w-full"></div>
-        </div>
-      )}
     </div>
   );
 };
@@ -163,7 +336,7 @@ const FeedList = () => {
 }
 
 
-const HUDOverlay: React.FC<HUDOverlayProps> = ({ handTrackingRef, currentRegion }) => {
+const HUDOverlay: React.FC<HUDOverlayProps> = ({ handTrackingRef, currentRegion, voiceRecognitionState, showMechaModel }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const requestRef = useRef<number | null>(null);
   
@@ -174,8 +347,62 @@ const HUDOverlay: React.FC<HUDOverlayProps> = ({ handTrackingRef, currentRegion 
   const [hexDump, setHexDump] = useState<string[]>([]);
   const [time, setTime] = useState('');
   
+  // System Resource Monitoring
+  const [systemStats, setSystemStats] = useState({
+    cpuUsage: '0%',
+    memoryUsage: '0%',
+    networkStatus: 'ONLINE',
+    batteryLevel: '100%'
+  });
+  
+  // Notification System
+  const [notifications, setNotifications] = useState<Array<{id: number, message: string, type: 'info' | 'warning' | 'error'}>>([]);
+  const notificationIdRef = useRef(0);
+  
   const reticleRotationRef = useRef(0);
   const wasPinchingRef = useRef(false);
+  
+  // Eye Tracking Simulation
+  const [eyePosition, setEyePosition] = useState({ x: 0, y: 0 });
+  const eyePosRef = useRef({ x: 0, y: 0 });
+  const eyeSmoothingRef = useRef(0.15); // Smoothing factor for eye movement
+  
+  // Simulate eye movement when mecha panel is active
+  useEffect(() => {
+    if (!showMechaModel) {
+      // Reset to center when mecha panel is closed
+      setEyePosition({ x: 0, y: 0 });
+      eyePosRef.current = { x: 0, y: 0 };
+      return;
+    }
+    
+    // Simulate eye movement with randomness and smooth transitions
+    const simulateEyeMovement = () => {
+      if (!showMechaModel) return;
+      
+      // Generate random eye movement within a reasonable range (-0.5 to 0.5)
+      const targetX = (Math.random() - 0.5) * 0.5;
+      const targetY = (Math.random() - 0.5) * 0.5;
+      
+      // Update eye position with smoothing
+      eyePosRef.current.x += (targetX - eyePosRef.current.x) * eyeSmoothingRef.current;
+      eyePosRef.current.y += (targetY - eyePosRef.current.y) * eyeSmoothingRef.current;
+      
+      setEyePosition({ ...eyePosRef.current });
+      
+      // Schedule next movement update
+      const nextDelay = 500 + Math.random() * 1500; // Random delay between 500ms and 2000ms
+      setTimeout(simulateEyeMovement, nextDelay);
+    };
+    
+    // Start eye movement simulation
+    simulateEyeMovement();
+    
+    // Cleanup
+    return () => {
+      // No need for cleanup since we're using setTimeout and checking showMechaModel
+    };
+  }, [showMechaModel]);
 
   // Hex Dump & Time Effect
   useEffect(() => {
@@ -189,12 +416,62 @@ const HUDOverlay: React.FC<HUDOverlayProps> = ({ handTrackingRef, currentRegion 
         const now = new Date();
         setTime(now.toLocaleTimeString('zh-CN', { hour12: false }) + `.${now.getMilliseconds().toString().padStart(3, '0')}`);
     }, 50);
+    
+    // System Stats Update Interval
+    const statsInterval = setInterval(() => {
+        // Simulate system stats (in a real system, these would come from actual system APIs)
+        setSystemStats({
+            cpuUsage: `${Math.floor(Math.random() * 20 + 5)}%`,
+            memoryUsage: `${Math.floor(Math.random() * 30 + 40)}%`,
+            networkStatus: Math.random() > 0.95 ? 'OFFLINE' : 'ONLINE',
+            batteryLevel: `${Math.floor(Math.random() * 10 + 90)}%`
+        });
+    }, 2000);
 
     return () => {
         clearInterval(interval);
         clearInterval(timeInterval);
+        clearInterval(statsInterval);
     }
   }, []);
+  
+  // Add notification
+  const addNotification = (message: string, type: 'info' | 'warning' | 'error' = 'info') => {
+    const id = notificationIdRef.current++;
+    setNotifications(prev => [...prev, { id, message, type }]);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        setNotifications(prev => prev.filter(notification => notification.id !== id));
+    }, 5000);
+  };
+  
+  // Enhanced voice recognition status handling
+  useEffect(() => {
+    if (voiceRecognitionState.status === 'wake_word_detected') {
+        addNotification('贾维斯已唤醒', 'info');
+    } else if (voiceRecognitionState.status === 'recognizing') {
+        addNotification('正在识别语音指令', 'info');
+    }
+  }, [voiceRecognitionState.status]);
+  
+  // Enhanced gesture handling for notifications
+  useEffect(() => {
+    const hands = handTrackingRef.current;
+    if (hands.rightHand && hands.rightHand.gesture) {
+        switch (hands.rightHand.gesture) {
+            case 'thumb_up':
+                addNotification('操作已确认', 'info');
+                break;
+            case 'thumb_down':
+                addNotification('操作已取消', 'warning');
+                break;
+            case 'closed_fist':
+                addNotification('系统已锁定', 'info');
+                break;
+        }
+    }
+  }, [handTrackingRef]);
 
   // Canvas Drawing Loop (Hand Skeletal & Effects)
   useEffect(() => {
@@ -408,6 +685,68 @@ const HUDOverlay: React.FC<HUDOverlayProps> = ({ handTrackingRef, currentRegion 
         <div className="font-mono text-[10px] text-klein-blue opacity-60 leading-tight h-24 overflow-hidden">
           {hexDump.map((line, i) => <div key={i}>{line}</div>)}
         </div>
+        
+        {/* System Resource Monitor */}
+        <div className="bg-black/60 border-l border-t border-holo-cyan p-2 rounded-tr-lg backdrop-blur-md w-72">
+          <div className="text-[10px] uppercase tracking-widest text-holo-cyan mb-2">系统资源监控</div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <div className="flex justify-between text-[9px] text-gray-400">
+                <span>CPU 使用率</span>
+                <span className="text-holo-cyan">{systemStats.cpuUsage}</span>
+              </div>
+              <div className="w-full h-1 bg-gray-800 rounded overflow-hidden">
+                <div className="h-full bg-holo-cyan" style={{width: systemStats.cpuUsage}}></div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-[9px] text-gray-400">
+                <span>内存占用</span>
+                <span className="text-holo-cyan">{systemStats.memoryUsage}</span>
+              </div>
+              <div className="w-full h-1 bg-gray-800 rounded overflow-hidden">
+                <div className="h-full bg-holo-cyan" style={{width: systemStats.memoryUsage}}></div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-[9px] text-gray-400">
+                <span>网络状态</span>
+                <span className={`${systemStats.networkStatus === 'ONLINE' ? 'text-holo-cyan' : 'text-alert-red'}`}>{systemStats.networkStatus}</span>
+              </div>
+              <div className="w-full h-1 bg-gray-800 rounded overflow-hidden">
+                <div className={`h-full ${systemStats.networkStatus === 'ONLINE' ? 'bg-holo-cyan' : 'bg-alert-red'}`} style={{width: systemStats.networkStatus === 'ONLINE' ? '100%' : '0%'}}></div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex justify-between text-[9px] text-gray-400">
+                <span>电量水平</span>
+                <span className="text-holo-cyan">{systemStats.batteryLevel}</span>
+              </div>
+              <div className="w-full h-1 bg-gray-800 rounded overflow-hidden">
+                <div className="h-full bg-holo-cyan" style={{width: systemStats.batteryLevel}}></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Notification System */}
+      <div className="absolute top-8 right-1/2 transform translate-x-1/2 z-40 flex flex-col gap-2 max-w-md">
+        {notifications.map(notification => (
+          <div 
+            key={notification.id} 
+            className={`p-3 rounded-lg backdrop-blur-md animate-slide-down ${notification.type === 'info' ? 'bg-holo-cyan/20 border border-holo-cyan text-holo-cyan' : 
+                                                                          notification.type === 'warning' ? 'bg-yellow-500/20 border border-yellow-500 text-yellow-500' : 
+                                                                          'bg-alert-red/20 border border-alert-red text-alert-red'}`}
+          >
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${notification.type === 'info' ? 'bg-holo-cyan animate-pulse' : 
+                                                       notification.type === 'warning' ? 'bg-yellow-500 animate-pulse' : 
+                                                       'bg-alert-red animate-pulse'}`}></div>
+              <span className="text-xs font-mono">{notification.message}</span>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Top Right: Title & Clock */}
@@ -541,6 +880,10 @@ const HUDOverlay: React.FC<HUDOverlayProps> = ({ handTrackingRef, currentRegion 
             </svg>
           </div>
       )}
+      
+      {/* Right Eye Tracker - Show only when Mecha Panel is active */}
+      {showMechaModel && <RightEyeTracker eyePos={eyePosition} />}
+      
       {/* Voice Recognition Status Indicator */}
       <VoiceRecognitionIndicator state={voiceRecognitionState} />
       

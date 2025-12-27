@@ -14,9 +14,16 @@ export interface HandInteractionData {
   rotationControl: { x: number, y: number }; // -1 to 1 for both axes (Joystick style)
 }
 
+export interface EyeTrackingData {
+  x: number;
+  y: number;
+  confidence: number;
+}
+
 export interface HandTrackingState {
   leftHand: HandInteractionData | null;
   rightHand: HandInteractionData | null;
+  rightEye?: EyeTrackingData;
 }
 
 export enum RegionName {

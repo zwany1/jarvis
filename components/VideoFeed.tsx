@@ -62,7 +62,7 @@ const VideoFeed: React.FC<VideoFeedProps> = ({ onTrackingUpdate }) => {
                       rightHand: null
                     };
 
-                    if (results.landmarks) {
+                    if (results.landmarks && results.gestures) {
                       results.landmarks.forEach((landmarks, index) => {
                         const handednessCategory = results.handedness[index]?.[0];
                         const handedness = (handednessCategory?.categoryName || 'Right') as 'Left' | 'Right';
@@ -76,17 +76,20 @@ const VideoFeed: React.FC<VideoFeedProps> = ({ onTrackingUpdate }) => {
                         );
                         const isPinching = pinchDist < 0.05;
 
+                        // Recognize gesture
+                        const gesture = results.gestures[index]?.[0]?.categoryName || '';
+
                         let expansionFactor = 0;
                         let rotationControl = { x: 0, y: 0 };
 
                         if (handedness === 'Left') {
-                            // Left Hand: Expansion/Zoom Control
+                            // Left Hand: Expansion/Zoom Control and Gesture Actions
                             const minPinch = 0.02;
                             const maxPinch = 0.18;
                             const normalized = (pinchDist - minPinch) / (maxPinch - minPinch);
                             expansionFactor = Math.max(0, Math.min(1, normalized));
                         } else {
-                            // Right Hand: 2D Rotation Control (Joystick style)
+                            // Right Hand: 2D Rotation Control (Joystick style) and Gesture Actions
                             // Hand Center (Middle finger MCP index 9)
                             const handX = landmarks[9].x; 
                             const handY = landmarks[9].y;
@@ -104,6 +107,7 @@ const VideoFeed: React.FC<VideoFeedProps> = ({ onTrackingUpdate }) => {
                         const handData: HandInteractionData = {
                           landmarks,
                           handedness,
+                          gesture,
                           isPinching,
                           pinchDistance: pinchDist,
                           expansionFactor,
