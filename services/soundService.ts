@@ -204,19 +204,19 @@ export class SoundService {
       this.currentContext = null;
       this.notifyVoiceEvent(VoiceRecognitionStatus.LISTENING, transcript);
     } else {
-      // Check if it's a command handled by the callback (like mecha panel)
-      if (this.conversationCallback) {
-        // Check if the command is handled by the callback
-        const lowerTranscript = transcript.toLowerCase();
-        if (lowerTranscript.includes('机甲面板') || lowerTranscript.includes('关闭机甲面板') || lowerTranscript.includes('卫星部署')) {
-          this.conversationCallback(transcript);
+      // Check if it's a command handled by the callback (like mecha panel, world map)
+        if (this.conversationCallback) {
+          // Check if the command is handled by the callback
+          const lowerTranscript = transcript.toLowerCase();
+          if (lowerTranscript.includes('机甲面板') || lowerTranscript.includes('关闭机甲面板') || lowerTranscript.includes('卫星部署') || lowerTranscript.includes('世界地图')) {
+            this.conversationCallback(transcript);
+          } else {
+            // For other commands, use DeepSeek API
+            const answer = await this.callDeepSeekApi(transcript);
+            this.speak(answer);
+            this.addToConversationHistory('jarvis', answer);
+          }
         } else {
-          // For other commands, use DeepSeek API
-          const answer = await this.callDeepSeekApi(transcript);
-          this.speak(answer);
-          this.addToConversationHistory('jarvis', answer);
-        }
-      } else {
         // If no callback, check if it's a known default command
         const lowerTranscript = transcript.toLowerCase();
         let handled = false;

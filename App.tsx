@@ -6,6 +6,7 @@ import HolographicEarth from './components/HolographicEarth';
 import MechaModel from './components/MechaModel';
 import HUDOverlay from './components/HUDOverlay';
 import JarvisIntro from './components/JarvisIntro';
+import WorldMap from './components/WorldMap';
 import { HandTrackingState, RegionName, VoiceRecognitionState, VoiceRecognitionStatus } from './types';
 import { SoundService } from './services/soundService';
 
@@ -21,6 +22,8 @@ const App: React.FC = () => {
   const [bootStep, setBootStep] = useState(0);
   // New state for mecha model display
   const [showMechaModel, setShowMechaModel] = useState(false);
+  // State for world map display
+  const [showWorldMap, setShowWorldMap] = useState(false);
   
   // Voice recognition state management
   const [voiceRecognitionState, setVoiceRecognitionState] = useState<VoiceRecognitionState>({
@@ -69,6 +72,16 @@ const App: React.FC = () => {
                else if (command.includes('卫星部署')) {
                  setShowMechaModel(false);
                  SoundService.speak('卫星部署指令已执行，前往地球模型');
+               }
+               // Handle "世界地图" command
+               else if (command.includes('世界地图')) {
+                 setShowWorldMap(true);
+                 SoundService.speak('已打开世界地图');
+               }
+               // Handle "关闭世界地图" command
+               else if (command.includes('关闭世界地图')) {
+                 setShowWorldMap(false);
+                 SoundService.speak('已关闭世界地图');
                }
              });
              setVoiceRecognitionState(prev => ({ ...prev, status: VoiceRecognitionStatus.LISTENING }));
@@ -187,6 +200,11 @@ const App: React.FC = () => {
         voiceRecognitionState={voiceRecognitionState}
         showMechaModel={showMechaModel}
       />
+
+      {/* 4. World Map Modal */}
+      {showWorldMap && (
+        <WorldMap onClose={() => setShowWorldMap(false)} />
+      )}
     </div>
   );
 };
